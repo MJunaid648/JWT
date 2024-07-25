@@ -1,0 +1,5 @@
+# Ignore node_modules in the api directory
+api/node_modules/
+
+# Ignore node_modules in the client directory
+client/node_modules/
