@@ -16,43 +16,93 @@ const users = [
     isAdmin: false,
   },
 ];
+let refreshTokens = [];
+
+const SECRET_KEY = "mySecretKey";
+
+const generateAccessToken = (user) => {
+  return jwt.sign({ id: user.id, isAdmin: user.isAdmin }, SECRET_KEY, {
+    expiresIn: "15m",
+  });
+};
+
+const generateRefreshToken = (user) => {
+  return jwt.sign({ id: user.id, isAdmin: user.isAdmin }, "myRefreshSecretKey");
+};
 
 app.use(express.json());
 
+app.post("/api/refresh", (req, res) => {
+  const refreshToken = req.body.token;
+
+  if (!refreshToken) return res.status(401).json("You are not authenticated!");
+  if (!refreshTokens.includes(refreshToken)) {
+    return res.status(403).json("Refresh token is not valid!");
+  }
+  jwt.verify(refreshToken, "myRefreshSecretKey", (err, user) => {
+    err && console.log(err);
+    refreshTokens = refreshTokens.filter((token) => token !== refreshToken);
+
+    const newAccessToken = generateAccessToken(user);
+    const newRefreshToken = generateRefreshToken(user);
+
+    refreshTokens.push(newRefreshToken);
+
+    res.status(200).json({
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+    });
+  });
+});
+
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body;
-
-  const user = users.find(
-    (u) => u.username === username && u.password === password
-  );
+  const user = users.find((u) => {
+    return u.username === username && u.password === password;
+  });
   if (user) {
-    const token = jwt.sign(
-      { id: user.id, isAdmin: user.isAdmin },
-      "mySecretKey"
-    );
-    res.json({ user_id: user.id, is_admin: user.isAdmin, access_token: token });
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+    refreshTokens.push(refreshToken);
+    res.json({
+      username: user.username,
+      isAdmin: user.isAdmin,
+      accessToken,
+      refreshToken,
+    });
   } else {
-    res.status(400).json("username or password is incorrect!");
+    res.status(400).json("Username or password incorrect!");
   }
 });
 
 const verify = (req, res, next) => {
-  const authHeader = req.header.authorization;
+  const authHeader = req.headers.authorization;
+
   if (authHeader) {
     const token = authHeader.split(" ")[1];
 
-    jwt.verify(token, mySecretKey, (err, user) => {
+    jwt.verify(token, SECRET_KEY, (err, user) => {
       if (err) return res.status(403).json("Invalid token!");
-      else {
-        req.user = user;
-        next();
-      }
+      req.user = user;
+      next();
     });
   } else {
     res.status(401).json("Unauthorized!");
   }
 };
 
-app.delete("/api/users/:userId", verify, (res, res) => {});
+app.delete("/api/users/:userId", verify, (req, res) => {
+  if (req.user.id === req.params.userId || req.user.isAdmin) {
+    res.status(200).json("User is deleted");
+  } else {
+    res.status(403).json("Operation not allowed");
+  }
+});
 
-app.listen(5000, () => console.log("server is listening to port: ", 5000));
+app.post("/api/logout", verify, (req, res) => {
+  const refreshToken = req.body.token;
+  refreshTokens = refreshTokens.filter((token) => token !== refreshToken);
+  res.status(200).json("You have been logged out successfully!");
+});
+
+app.listen(5000, () => console.log("Server is listening on port 5000"));
