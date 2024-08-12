@@ -1,6 +1,7 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const app = express();
+const cors = require("cors");
 
 const users = [
   {
@@ -22,7 +23,7 @@ const SECRET_KEY = "mySecretKey";
 
 const generateAccessToken = (user) => {
   return jwt.sign({ id: user.id, isAdmin: user.isAdmin }, SECRET_KEY, {
-    expiresIn: "15m",
+    expiresIn: "5s",
   });
 };
 
@@ -31,6 +32,7 @@ const generateRefreshToken = (user) => {
 };
 
 app.use(express.json());
+app.use(cors());
 
 app.post("/api/refresh", (req, res) => {
   const refreshToken = req.body.token;
@@ -98,6 +100,7 @@ app.delete("/api/users/:userId", verify, (req, res) => {
     res.status(403).json("Operation not allowed");
   }
 });
+
 
 app.post("/api/logout", verify, (req, res) => {
   const refreshToken = req.body.token;
